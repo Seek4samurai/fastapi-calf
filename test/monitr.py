@@ -6,7 +6,7 @@ from main import health
 
 app = FastAPI()
 
-@app.get("/health")
+@app.get("/")
 @health
 def home():
     return {"message": "FastAPI server is running"}
@@ -14,7 +14,7 @@ def home():
 client = TestClient(app)
 
 def test_health_decorator(capsys):
-    response = client.get("/health")
+    response = client.get("/")
 
     assert response.status_code == 200
     assert response.json() == {
