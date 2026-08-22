@@ -10,32 +10,37 @@ stats = {}
 
 start_time = time.time()
 
-
 def process_event(event):
-    key = (event["method"], event["path"])
+    key = (
+        event["method"],
+        event["path"],
+    )
 
     if key not in stats:
         stats[key] = {
             "method": event["method"],
             "path": event["path"],
             "requests": 0,
+            "failed": 0,
             "total_latency": 0,
             "last_latency": 0,
             "total_bytes": 0,
             "last_called": 0,
+            "last_status": 200,
         }
 
     item = stats[key]
 
     item["requests"] += 1
-
     item["total_latency"] += event["latency_ms"]
-
     item["last_latency"] = event["latency_ms"]
-
     item["total_bytes"] += event["request_size"]
-
     item["last_called"] = time.time()
+    item["last_status"] = event["status"]
+
+    # Count failed requests
+    if event["status"] >= 400:
+        item["failed"] += 1
 
 
 def create_table():
@@ -45,32 +50,32 @@ def create_table():
     table.add_column("Method")
     table.add_column("Activity")
     table.add_column("Requests", justify="right")
+    table.add_column("Failed", justify="right")
     table.add_column("Avg latency", justify="right")
     table.add_column("Last", justify="right")
-    table.add_column("Req/sec", justify="right")
-    table.add_column("Bytes", justify="right")
-
-    uptime = max(time.time() - start_time, 0.001)
+    table.add_column("Status", justify="right")
 
     now = time.time()
 
     for item in stats.values():
-        avg_latency = item["total_latency"] / item["requests"]
+        avg_latency = (item["total_latency"] / item["requests"] if item["requests"] > 0 else 0)
 
-        requests_per_second = item["requests"] / uptime
+        active = ("● ● ●" if now - item["last_called"] < 0.5 else "")
 
-        # Show activity symbol for 0.5 sec
-        active = ("●" if now - item["last_called"] < 0.5 else "")
+        failed_display = (f"[red]{item['failed']}[/red]" if item["failed"] > 0 else "0")
+
+        style = ("bold red" if item["last_status"] >= 400 else None)
 
         table.add_row(
             item["path"],
             item["method"],
             active,
             str(item["requests"]),
+            failed_display,
             f"{avg_latency:.2f} ms",
-            f'{item["last_latency"]:.2f} ms',
-            f"{requests_per_second:.2f}",
-            str(item["total_bytes"]),
+            f"{item['last_latency']:.2f} ms",
+            str(item["last_status"]),
+            style=style,
         )
 
     return table
