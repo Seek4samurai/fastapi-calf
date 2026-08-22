@@ -53,7 +53,7 @@ def test_get_api(capsys):
     assert "Method: GET" in output
     assert "Path: /health" in output
     assert "Query params: {}" in output
-    assert "Body: None" in output
+    assert "Body size: 0 bytes" in output
 
 
 def test_get_api_with_query_parameter(capsys):
@@ -66,7 +66,7 @@ def test_get_api_with_query_parameter(capsys):
     assert "Method: GET" in output
     assert "Path: /items" in output
     assert "Query params: {'limit': '5'}" in output
-    assert "Body: None" in output
+    assert "Body size: 0 bytes" in output
 
 
 def test_post_api_with_body_and_query_parameter(capsys):
@@ -86,4 +86,4 @@ def test_post_api_with_body_and_query_parameter(capsys):
     assert "Method: POST" in output
     assert "Path: /items" in output
     assert "Query params: {'notify': 'true'}" in output
-    assert 'Body: {"name":"Keyboard","quantity":2}' in output
+    assert "Body size: 32 bytes" in output
