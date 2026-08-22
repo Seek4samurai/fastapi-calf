@@ -1,6 +1,7 @@
-import asyncio
 import json
 import time
+import asyncio
+import argparse
 
 from rich.live import Live
 from rich.table import Table
@@ -44,7 +45,7 @@ def process_event(event):
 
 
 def create_table():
-    table = Table(title="MonitorDev", expand=True)
+    table = Table(title="fastapi-calf", expand=True)
 
     table.add_column("Endpoint")
     table.add_column("Method")
@@ -83,11 +84,11 @@ def create_table():
 
 async def handle_client(reader, writer):
     data = await reader.readline()
+
     if data:
         try:
             event = json.loads(data)
             process_event(event)
-
         except json.JSONDecodeError:
             pass
 
@@ -95,8 +96,8 @@ async def handle_client(reader, writer):
     await writer.wait_closed()
 
 
-async def run_server():
-    server = await asyncio.start_server(handle_client, "127.0.0.1", 8765)
+async def run_server(port: int):
+    server = await asyncio.start_server(handle_client, "127.0.0.1", port)
     async with server:
         await server.serve_forever()
 
@@ -108,9 +109,15 @@ async def run_ui():
             await asyncio.sleep(0.1)
 
 
-async def main():
-    await asyncio.gather(run_server(), run_ui())
+async def main(port: int):
+    await asyncio.gather(run_server(port), run_ui())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-p", "--port", type=int, default=8765, help="Port for fastapi-calf")
+
+    args = parser.parse_args()
+
+    asyncio.run(main(args.port))

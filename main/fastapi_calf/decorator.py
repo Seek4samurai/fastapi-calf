@@ -8,7 +8,7 @@ from fastapi import Request
 from .emitter import emit_event
 
 
-def observer_block(func):
+def lookout(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
         request: Request | None = kwargs.get("request")

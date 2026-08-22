@@ -1,22 +1,23 @@
 import json
 import socket
 
-
-HOST = "127.0.0.1"
-PORT = 8765
+from .config import config
 
 
 def emit_event(event: dict):
     try:
+        print("Calf connecting to:", config.host, config.port)
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(0.05)
 
-            sock.connect((HOST, PORT))
+            sock.connect((config.host, config.port))
 
             payload = json.dumps(event).encode("utf-8") + b"\n"
 
             sock.sendall(payload)
 
-    except (ConnectionRefusedError, TimeoutError, OSError):
+    except (ConnectionRefusedError, TimeoutError, OSError) as error:
         # Monitoring should NEVER crash the API
+        print("Calf emitter error:", error)
         pass

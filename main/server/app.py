@@ -1,25 +1,26 @@
 from fastapi import FastAPI, Request
-
-from ..decorator import observer_block
+from fastapi_calf import lookout, Calf
 
 
 app = FastAPI()
 
+Calf.listen(port=8005)
+
 
 @app.get("/health")
-@observer_block
+@lookout
 def health(request: Request):
     return {"message": "healthy"}
 
 
 @app.get("/users")
-@observer_block
+@lookout
 def users(request: Request):
     return {"users": ["alice", "bob"]}
 
 
 @app.post("/process")
-@observer_block
+@lookout
 async def process(request: Request):
     raw_body = await request.body()
 
