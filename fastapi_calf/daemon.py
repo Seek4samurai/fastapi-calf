@@ -10,7 +10,9 @@ from rich.align import Align
 from rich.console import Group
 
 from .system import set_process, get_process_stats
-
+from .history import cpu_history, latency_history, rps_history
+from .metrics import record_request, get_rps, get_window_latency
+from .sparkline import sparkline
 
 stats = {}
 
@@ -19,6 +21,9 @@ start_time = time.time()
 current_pid = None
 
 cuda_visible_devices = None
+
+last_history_sample = 0
+
 
 def process_event(event):
     global current_pid
@@ -30,9 +35,14 @@ def process_event(event):
         set_process(pid)
         current_pid = pid
         cuda_visible_devices = event.get("cuda_visible_devices")
+
+    # This was only a process/system event
+    if "method" not in event or "path" not in event:
         return
 
     key = (event["method"], event["path"])
+
+    record_request(event["latency_ms"])
 
     if key not in stats:
         stats[key] = {
@@ -59,6 +69,48 @@ def process_event(event):
     # Count failed requests
     if event["status"] >= 400:
         item["failed"] += 1
+
+
+def sample_history(process_stats):
+    global last_history_sample
+
+    now = time.time()
+
+    if now - last_history_sample < 1:
+        return
+
+    if process_stats:
+        cpu_history.append(process_stats["cpu"])
+
+    latency_history.append(get_window_latency())
+
+    rps_history.append(get_rps())
+
+    last_history_sample = now
+
+
+def latest(values, default=0):
+    return values[-1] if values else default
+
+
+def build_history_panel():
+    return Group(
+        Text(
+            f"CPU       "
+            f"{latest(cpu_history):5.1f}%  "
+            f"{sparkline(cpu_history, 0, 100)}"
+        ),
+        Text(
+            f"Latency   "
+            f"{latest(latency_history):5.1f}ms "
+            f"{sparkline(latency_history)}"
+        ),
+        Text(
+            f"RPS       "
+            f"{latest(rps_history):5.1f}   "
+            f"{sparkline(rps_history)}"
+        ),
+    )
 
 
 def create_table():
@@ -98,20 +150,23 @@ def create_table():
 
     process_stats = get_process_stats()
 
-    global cuda_visible_devices
-
     if process_stats:
         system_text = (
             f"CPU {process_stats['cpu']:.1f}%"
             f"    Memory {process_stats['ram_mb']:.1f} MB"
-            f"    GPU {"none" if cuda_visible_devices is None else cuda_visible_devices}"
+            f"    GPU {'none' if cuda_visible_devices is None else cuda_visible_devices}"
         )
     else:
         system_text = "CPU --    Memory --    GPU --"
 
+    sample_history(process_stats)
+
     return Group(
         Align.center(Text("fastapi-calf", style="bold")),
         Align.center(Text(system_text)),
+        Text(""),
+        build_history_panel(),
+        Text(""),
         table,
     )
 

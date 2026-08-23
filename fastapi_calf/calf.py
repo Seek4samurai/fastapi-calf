@@ -20,4 +20,3 @@ class Calf:
             "pid": os.getpid(),
             "cuda_visible_devices": os.getenv("CUDA_VISIBLE_DEVICES")
         })
-
