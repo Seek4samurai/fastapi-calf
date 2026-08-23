@@ -221,21 +221,45 @@ def create_workers_table():
 
     dead_workers = []
 
+    now = time.time()
+    workers_to_remove = []
+
+
     for pid, worker in workers.items():
         process_stats = get_process_stats(pid)
 
         if process_stats is None:
-            dead_workers.append(pid)
+            if worker["dead_since"] is None:
+                worker["dead_since"] = now
+
+            # Remove only after 5 seconds
+            if now - worker["dead_since"] >= 5:
+                workers_to_remove.append(pid)
+                continue
+
+            table.add_row(
+                str(pid),
+                "--",
+                "--",
+                str(worker["requests"]),
+                "none"
+                if worker["cuda_visible_devices"] is None
+                else str(worker["cuda_visible_devices"]),
+                style="dim",
+            )
+
             continue
 
-        gpu = worker["cuda_visible_devices"]
+        worker["dead_since"] = None
 
         table.add_row(
             str(pid),
             f"{process_stats['cpu']:.1f}%",
             f"{process_stats['ram_mb']:.1f} MB",
             str(worker["requests"]),
-            "none" if gpu is None else str(gpu),
+            "none"
+            if worker["cuda_visible_devices"] is None
+            else str(worker["cuda_visible_devices"]),
         )
 
     for pid in dead_workers:
