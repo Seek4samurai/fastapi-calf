@@ -1,0 +1,6 @@
+# TestClient uses httpx; Uvicorn is needed for the live four-worker test.
+fastapi
+httpx
+pytest
+uvicorn
+
