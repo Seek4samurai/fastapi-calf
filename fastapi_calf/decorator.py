@@ -1,5 +1,6 @@
 import inspect
 import time
+import os
 
 from datetime import datetime, timezone
 from functools import wraps
@@ -48,6 +49,7 @@ def lookout(func):
                     "latency_ms": latency_ms,
                     "status": status_code,
                     "error": error,
+                    "pid": os.getpid(),
                 }
 
                 emit_event(event)

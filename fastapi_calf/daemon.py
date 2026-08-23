@@ -5,17 +5,30 @@ import argparse
 
 from rich.live import Live
 from rich.table import Table
+from rich.text import Text
+from rich.align import Align
+from rich.console import Group
+
+from .system import set_process, get_process_stats
 
 
 stats = {}
 
 start_time = time.time()
 
+current_pid = None
+
+
 def process_event(event):
-    key = (
-        event["method"],
-        event["path"],
-    )
+    global current_pid
+
+    pid = event.get("pid")
+
+    if pid is not None and pid != current_pid:
+        set_process(pid)
+        current_pid = pid
+
+    key = (event["method"], event["path"])
 
     if key not in stats:
         stats[key] = {
@@ -45,7 +58,7 @@ def process_event(event):
 
 
 def create_table():
-    table = Table(title="fastapi-calf", expand=True)
+    table = Table(expand=True)
 
     table.add_column("Endpoint")
     table.add_column("Method")
@@ -79,7 +92,21 @@ def create_table():
             style=style,
         )
 
-    return table
+    process_stats = get_process_stats()
+
+    if process_stats:
+        system_text = (
+            f"CPU {process_stats['cpu']:.1f}%"
+            f"    RAM {process_stats['ram_mb']:.1f} MB"
+        )
+    else:
+        system_text = "CPU --    RAM --"
+
+    return Group(
+        Align.center(Text("fastapi-calf", style="bold")),
+        Align.center(Text(system_text)),
+        table,
+    )
 
 
 async def handle_client(reader, writer):
