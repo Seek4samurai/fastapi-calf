@@ -18,15 +18,19 @@ start_time = time.time()
 
 current_pid = None
 
+cuda_visible_devices = None
 
 def process_event(event):
     global current_pid
+    global cuda_visible_devices
 
     pid = event.get("pid")
 
     if pid is not None and pid != current_pid:
         set_process(pid)
         current_pid = pid
+        cuda_visible_devices = event.get("cuda_visible_devices")
+        return
 
     key = (event["method"], event["path"])
 
@@ -94,13 +98,16 @@ def create_table():
 
     process_stats = get_process_stats()
 
+    global cuda_visible_devices
+
     if process_stats:
         system_text = (
             f"CPU {process_stats['cpu']:.1f}%"
-            f"    RAM {process_stats['ram_mb']:.1f} MB"
+            f"    Memory {process_stats['ram_mb']:.1f} MB"
+            f"    GPU {"none" if cuda_visible_devices is None else cuda_visible_devices}"
         )
     else:
-        system_text = "CPU --    RAM --"
+        system_text = "CPU --    Memory --    GPU --"
 
     return Group(
         Align.center(Text("fastapi-calf", style="bold")),

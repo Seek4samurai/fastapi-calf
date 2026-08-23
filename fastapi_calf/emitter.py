@@ -6,8 +6,6 @@ from .config import config
 
 def emit_event(event: dict):
     try:
-        print("Calf connecting to:", config.host, config.port)
-
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(0.05)
 

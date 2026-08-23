@@ -8,11 +8,6 @@ class Calf:
         config.host = host
         config.port = port
 
-        emit_event({
-            "type": "process_info",
-            "pid": os.getpid(),
-        })
-
         cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES")
 
         if cuda_devices is not None:
@@ -20,6 +15,9 @@ class Calf:
         else:
             print("CUDA_VISIBLE_DEVICES is not set")
 
-#
-#    BUG: Running daemon after running the server doesn't passes the pid
-#
+        emit_event({
+            "type": "process_info",
+            "pid": os.getpid(),
+            "cuda_visible_devices": os.getenv("CUDA_VISIBLE_DEVICES")
+        })
+
