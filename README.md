@@ -1,6 +1,6 @@
 # 🐮 fastapi-calf
 
-**A lightweight, real-time observability dashboard for FastAPI.**
+**A lightweight, real-time observability for FastAPI.**
 
 `fastapi-calf` watches decorated API routes and presents request activity,
 latency, throughput, failures, CPU, memory, and worker information in a compact
