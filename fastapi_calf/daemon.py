@@ -9,36 +9,47 @@ from rich.text import Text
 from rich.align import Align
 from rich.console import Group
 
-from .system import set_process, get_process_stats
+from .system import register_process, get_process_stats
 from .history import cpu_history, latency_history, rps_history
 from .metrics import record_request, get_rps, get_window_latency
 from .sparkline import sparkline
+
+workers = {
+    # pid: {
+    #     "requests": 0,
+    #     "cuda_visible_devices": None,
+    # }
+}
 
 stats = {}
 
 start_time = time.time()
 
-current_pid = None
-
-cuda_visible_devices = None
-
 last_history_sample = 0
 
 
 def process_event(event):
-    global current_pid
-    global cuda_visible_devices
-
     pid = event.get("pid")
 
-    if pid is not None and pid != current_pid:
-        set_process(pid)
-        current_pid = pid
-        cuda_visible_devices = event.get("cuda_visible_devices")
+    if pid is not None:
+        if pid not in workers:
+            register_process(pid)
+
+            workers[pid] = {
+                "requests": 0,
+                "cuda_visible_devices": event.get("cuda_visible_devices"),
+            }
+
+        # Update metadata if supplied again
+        if "cuda_visible_devices" in event:
+            workers[pid]["cuda_visible_devices"] = event["cuda_visible_devices"]
 
     # This was only a process/system event
     if "method" not in event or "path" not in event:
         return
+
+    if pid is not None:
+        workers[pid]["requests"] += 1
 
     key = (event["method"], event["path"])
 
@@ -113,6 +124,30 @@ def build_history_panel():
     )
 
 
+def get_total_process_stats():
+    total_cpu = 0
+    total_ram = 0
+    count = 0
+
+    for pid in workers:
+        process_stats = get_process_stats(pid)
+
+        if process_stats is None:
+            continue
+
+        total_cpu += process_stats["cpu"]
+        total_ram += process_stats["ram_mb"]
+        count += 1
+
+    if count == 0:
+        return None
+
+    return {
+        "cpu": total_cpu,
+        "ram_mb": total_ram,
+    }
+
+
 def create_table():
     table = Table(expand=True)
 
@@ -148,18 +183,20 @@ def create_table():
             style=style,
         )
 
-    process_stats = get_process_stats()
+    process_stats = get_total_process_stats()
 
     if process_stats:
         system_text = (
-            f"CPU {process_stats['cpu']:.1f}%"
-            f"    Memory {process_stats['ram_mb']:.1f} MB"
-            f"    GPU {'none' if cuda_visible_devices is None else cuda_visible_devices}"
+            f"CPU {process_stats['cpu']:.0f}%"
+            f"    Memory {process_stats['ram_mb']:.0f} MB"
+            f"    Workers {len(workers)}"
         )
     else:
-        system_text = "CPU --    Memory --    GPU --"
+        system_text = "CPU --    Memory --    Workers --"
 
     sample_history(process_stats)
+
+    workers_table = create_workers_table()
 
     return Group(
         Align.center(Text("fastapi-calf", style="bold")),
@@ -167,8 +204,44 @@ def create_table():
         Text(""),
         build_history_panel(),
         Text(""),
+        workers_table,
+        Text(""),
         table,
     )
+
+
+def create_workers_table():
+    table = Table(title="Workers", expand=True)
+
+    table.add_column("PID")
+    table.add_column("CPU", justify="right")
+    table.add_column("Memory", justify="right")
+    table.add_column("Requests", justify="right")
+    table.add_column("GPU", justify="right")
+
+    dead_workers = []
+
+    for pid, worker in workers.items():
+        process_stats = get_process_stats(pid)
+
+        if process_stats is None:
+            dead_workers.append(pid)
+            continue
+
+        gpu = worker["cuda_visible_devices"]
+
+        table.add_row(
+            str(pid),
+            f"{process_stats['cpu']:.1f}%",
+            f"{process_stats['ram_mb']:.1f} MB",
+            str(worker["requests"]),
+            "none" if gpu is None else str(gpu),
+        )
+
+    for pid in dead_workers:
+        workers.pop(pid, None)
+
+    return table
 
 
 async def handle_client(reader, writer):

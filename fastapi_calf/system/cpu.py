@@ -1,27 +1,37 @@
 import psutil
 
 
-_process = None
+_processes = {}
 
 
-def set_process(pid: int):
-    global _process
+def register_process(pid: int):
+    if pid in _processes:
+        return
 
-    _process = psutil.Process(pid)
+    try:
+        process = psutil.Process(pid)
 
-    # Prime CPU measurement
-    _process.cpu_percent(interval=None)
+        # Prime cpu_percent
+        process.cpu_percent(interval=None)
+
+        _processes[pid] = process
+
+    except psutil.NoSuchProcess:
+        pass
 
 
-def get_process_stats():
-    if _process is None:
+def get_process_stats(pid: int):
+    process = _processes.get(pid)
+
+    if process is None:
         return None
 
     try:
         return {
-            "cpu": _process.cpu_percent(interval=None),
-            "ram_mb": _process.memory_info().rss / (1024 * 1024),
+            "cpu": process.cpu_percent(interval=None),
+            "ram_mb": process.memory_info().rss / 1024 / 1024,
         }
 
-    except (psutil.NoSuchProcess, psutil.AccessDenied):
+    except psutil.NoSuchProcess:
+        _processes.pop(pid, None)
         return None
