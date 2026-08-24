@@ -74,9 +74,14 @@ def process_event(event):
     item["requests"] += 1
     item["total_latency"] += event["latency_ms"]
     item["last_latency"] = event["latency_ms"]
-    item["total_bytes"] += event["request_size"]
     item["last_called"] = time.time()
     item["last_status"] = event["status"]
+    # 
+    # NOTE: Disabled due to future changes &
+    #       due to removal of `request: Request`
+    # item["total_bytes"] += event["request_size"]
+    # 
+    item["total_bytes"] += event.get("request_size", 0)
 
     # Count failed requests
     if event["status"] >= 400:
@@ -292,6 +297,7 @@ async def run_server(port: int):
 async def run_ui():
     with Live(create_table(), refresh_per_second=10, screen=True) as live:
         while True:
+            # NOTE: Commented due to some bugs
             cleanup_workers(workers)
 
             live.update(create_table())

@@ -25,16 +25,14 @@ class Calf:
         async def calf_middleware(request: Request, call_next):
             start = time.perf_counter()
 
+            status = 500 # defaults to failure
+
             try:
                 response = await call_next(request)
 
                 status = response.status_code
 
                 return response
-
-            except Exception:
-                status = 500
-                raise
 
             finally:
                 latency_ms = (time.perf_counter() - start) * 1000
