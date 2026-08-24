@@ -297,8 +297,11 @@ async def run_server(port: int):
 async def run_ui():
     with Live(create_table(), refresh_per_second=10, screen=True) as live:
         while True:
-            # NOTE: Commented due to some bugs
-            # cleanup_workers(workers)
+            # NOTE: ---------------------------------------------------------------------------------------
+            # When uncommented, cleanup_workers will instantly remove the dead workers off the table
+            # During testing if u wanna observe dead workers, comment below line `cleanup_workers(workers)`
+            cleanup_workers(workers)
+            # ---------------------------------------------------------------------------------------------
 
             live.update(create_table())
             await asyncio.sleep(0.1)
@@ -308,12 +311,16 @@ async def run(port: int):
     await asyncio.gather(run_server(port), run_ui())
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--port", type=int, default=8765, help="Port for fastapi-calf")
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-p", "--port", type=int, default=8765, help="Port for fastapi-calf")
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    asyncio.run(run(args.port))
+        asyncio.run(run(args.port))
+
+    except KeyboardInterrupt:
+        print("fastapi-calf stopped.")
 
 
 if __name__ == "__main__":
