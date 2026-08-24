@@ -295,15 +295,17 @@ async def run_ui():
             await asyncio.sleep(0.1)
 
 
-async def main(port: int):
+async def run(port: int):
     await asyncio.gather(run_server(port), run_ui())
 
-
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
-
     parser.add_argument("-p", "--port", type=int, default=8765, help="Port for fastapi-calf")
 
     args = parser.parse_args()
 
-    asyncio.run(main(args.port))
+    asyncio.run(run(args.port))
+
+
+if __name__ == "__main__":
+    main()
