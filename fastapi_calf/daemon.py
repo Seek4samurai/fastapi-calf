@@ -13,6 +13,7 @@ from .system import register_process, get_process_stats
 from .history import cpu_history, latency_history, rps_history
 from .metrics import record_request, get_rps, get_window_latency
 from .sparkline import sparkline
+from .cleanup import cleanup_workers
 
 workers = {
     # pid: {
@@ -291,6 +292,8 @@ async def run_server(port: int):
 async def run_ui():
     with Live(create_table(), refresh_per_second=10, screen=True) as live:
         while True:
+            cleanup_workers(workers)
+
             live.update(create_table())
             await asyncio.sleep(0.1)
 
