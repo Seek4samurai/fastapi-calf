@@ -4,7 +4,7 @@ from fastapi_calf import lookout, Calf
 
 app = FastAPI()
 
-Calf.listen(app, port=8008)
+Calf.listen(app, port=8765)
 
 
 @app.get("/health")
@@ -18,7 +18,7 @@ def users():
 
 
 @app.post("/process")
-async def process():
+async def process(request: Request):
     raw_body = await request.body()
 
     if raw_body:

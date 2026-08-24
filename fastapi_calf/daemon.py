@@ -205,7 +205,7 @@ def create_table():
     workers_table = create_workers_table()
 
     return Group(
-        Align.center(Text("fastapi-calf", style="bold")),
+        Align.center(Text("🐮 fastapi-calf 🐮", style="bold")),
         Align.center(Text(system_text)),
         Text(""),
         build_history_panel(),
@@ -298,7 +298,7 @@ async def run_ui():
     with Live(create_table(), refresh_per_second=10, screen=True) as live:
         while True:
             # NOTE: Commented due to some bugs
-            cleanup_workers(workers)
+            # cleanup_workers(workers)
 
             live.update(create_table())
             await asyncio.sleep(0.1)

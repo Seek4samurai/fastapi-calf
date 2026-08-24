@@ -16,7 +16,6 @@ class Calf:
         cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES")
 
         emit_event({
-            "type": "process_info",
             "pid": os.getpid(),
             "cuda_visible_devices": cuda_devices,
         })
@@ -38,7 +37,8 @@ class Calf:
                 latency_ms = (time.perf_counter() - start) * 1000
 
                 emit_event({
-                    "type": "request",
+                    "pid": os.getpid(),
+                    "cuda_visible_devices": cuda_devices,
                     "method": request.method,
                     "path": request.url.path,
                     "status": status,
