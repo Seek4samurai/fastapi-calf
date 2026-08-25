@@ -4,7 +4,6 @@ import os
 
 from datetime import datetime, timezone
 from functools import wraps
-from fastapi import Request
 
 from .emitter import emit_event
 
@@ -12,7 +11,7 @@ from .emitter import emit_event
 def lookout(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        request: Request | None = kwargs.get("request")
+        request = kwargs.get("request")
 
         start_timestamp = datetime.now(timezone.utc)
         start_timer = time.perf_counter()

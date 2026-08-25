@@ -1,8 +1,6 @@
 import os
 import time
 
-from fastapi import Request
-
 from .config import config
 from .emitter import emit_event
 
@@ -21,7 +19,7 @@ class Calf:
         })
 
         @app.middleware("http")
-        async def calf_middleware(request: Request, call_next):
+        async def calf_middleware(request, call_next):
             start = time.perf_counter()
 
             status = 500 # defaults to failure
