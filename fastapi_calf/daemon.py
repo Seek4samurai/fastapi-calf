@@ -253,7 +253,7 @@ def create_table():
     workers_table = create_workers_table()
 
     return Group(
-        Align.center(Text("🐮 fastapi-calf 🐮", style="bold")),
+        # Align.center(Text("🐮 fastapi-calf 🐮", style="bold")),
         Align.center(Text(system_text)),
         Text(""),
         build_history_panel(),

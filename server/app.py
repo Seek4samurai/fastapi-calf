@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi_calf import Calf
 from typing import Any
+import time
 # import torch
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -24,9 +25,14 @@ def users():
 
 
 @app.post("/translate")
-def users():
+def translate(background_tasks: BackgroundTasks):
+    background_tasks.add_task(dummy_slow_translation)
+    return {"message": "translation queued"}
 
-    return {"message": "done..."}
+
+def dummy_slow_translation():
+    time.sleep(60)
+    print("Dummy translation completed")
 
 
 @app.post("/process")
