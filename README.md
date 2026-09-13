@@ -47,7 +47,7 @@ from fastapi import FastAPI, Request
 from fastapi_calf import Calf, lookout
 
 app = FastAPI()
-Calf.listen(port=8005)
+Calf.listen(app, port=8005, server="jobs_api")
 
 
 @app.get("/health")
@@ -65,6 +65,11 @@ async def create_job(request: Request):
 
 The `Request` parameter allows `@lookout` to capture the method, path, query
 parameters, request size, status, and timing without changing the response.
+
+Calf creates `calf.sqlite3` in the application's current working directory.
+Each `server` value gets its own table (for example, `jobs_api` uses
+`calf_jobs_api`). Existing tables are reused, so events continue accumulating
+across application restarts.
 
 ## Tests and traffic simulation
 
@@ -94,4 +99,3 @@ tests/          endpoint and concurrent load tests
 ```
 
 > **Status:** This is an early-stage project intended for experimentations with ML pipelines and POCs.
-

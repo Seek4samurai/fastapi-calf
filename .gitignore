@@ -10,6 +10,8 @@ htmlcov/
 venv/
 env/
 
+dist/
+
 .env
 .env.*
 !.env.example
@@ -18,3 +20,7 @@ env/
 .vscode/
 
 /fastapi_calf.egg-info/
+
+calf.sqlite3
+calf.sqlite3-shm
+calf.sqlite3-wal

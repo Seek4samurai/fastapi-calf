@@ -1,17 +1,18 @@
 import os
 import time
 
-from fastapi import Request
-
 from .config import config
 from .emitter import emit_event
+from .storage import initialize_database
 
 
 class Calf:
     @staticmethod
-    def listen(app, port: int, host: str = "127.0.0.1"):
+    def listen(app, port: int, server: str, host: str = "127.0.0.1"):
         config.host = host
         config.port = port
+        config.server = server
+        config.database_path, config.event_table = initialize_database(server)
 
         cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES")
 
@@ -21,7 +22,7 @@ class Calf:
         })
 
         @app.middleware("http")
-        async def calf_middleware(request: Request, call_next):
+        async def calf_middleware(request, call_next):
             start = time.perf_counter()
 
             status = 500 # defaults to failure
