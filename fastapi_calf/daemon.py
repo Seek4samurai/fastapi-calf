@@ -93,6 +93,7 @@ def process_event(event):
     item["last_latency"] = event["latency_ms"]
     item["last_called"] = time.time()
     item["last_status"] = event["status"]
+    item["lifecycle"] = event.get("lifecycle")
     #
     # NOTE: Disabled due to future changes &
     #       due to removal of `request: Request`
@@ -120,6 +121,7 @@ def get_route_stats(method, path):
             "last_status": 200,
             "blocks": 0,
             "worst_block_ms": 0,
+            "lifecycle": None,
         }
     return stats[key]
 
@@ -251,6 +253,7 @@ def create_table():
     sample_history(process_stats)
 
     workers_table = create_workers_table()
+    lifecycle_table = create_lifecycle_table()
 
     blocking_text = Text("No event-loop stalls detected", style="dim")
     if blocking_alerts:
@@ -276,7 +279,40 @@ def create_table():
         workers_table,
         Text(""),
         table,
+        Text(""),
+        lifecycle_table,
     )
+
+
+def create_lifecycle_table():
+    table = Table(title="Last request lifecycle", expand=True)
+    table.add_column("Endpoint")
+    table.add_column("Parse", justify="right")
+    table.add_column("Dependencies", justify="right")
+    table.add_column("Endpoint", justify="right")
+    table.add_column("Serialization", justify="right")
+    table.add_column("Middleware", justify="right")
+    table.add_column("Background", justify="right")
+    table.add_column("Total", justify="right")
+
+    for item in stats.values():
+        lifecycle = item.get("lifecycle")
+        if not lifecycle:
+            continue
+        table.add_row(
+            f"{item['method']} {item['path']}",
+            f"{lifecycle.get('parsing', 0):.1f} ms",
+            f"{lifecycle.get('dependencies', 0):.1f} ms",
+            f"{lifecycle.get('endpoint', 0):.1f} ms",
+            f"{lifecycle.get('serialization', 0):.1f} ms",
+            f"{lifecycle.get('middleware', 0):.1f} ms",
+            f"{lifecycle.get('background', 0):.1f} ms",
+            f"{lifecycle.get('total', 0):.1f} ms",
+        )
+
+    if table.row_count == 0:
+        table.add_row("Waiting for requests", "-", "-", "-", "-", "-", "-", "-")
+    return table
 
 
 def create_workers_table():

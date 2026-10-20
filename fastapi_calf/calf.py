@@ -1,9 +1,9 @@
 import os
-import time
-
 from .config import config
 from .blocking import BlockingDetector
 from .emitter import emit_event, emit_event_async
+from .lifecycle import CalfLifecycleMiddleware, install_lifecycle_hooks
+from .dashboard import DashboardStore, install_dashboard
 
 
 class Calf:
@@ -17,6 +17,9 @@ class Calf:
         detect_blocking: bool = True,
         block_threshold: float = 100,
         block_check_interval: float = 50,
+        dashboard: bool = True,
+        dashboard_path: str = "/calf",
+        ignore_paths: tuple[str, ...] | list[str] = (),
     ):
         config.host = host
         config.port = port
@@ -24,15 +27,23 @@ class Calf:
 
         cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES")
 
-        emit_event({
+        store = DashboardStore(server)
+
+        async def emit_and_record(event):
+            store.record(event)
+            await emit_event_async(event)
+
+        process_event = {
             "pid": os.getpid(),
             "cuda_visible_devices": cuda_devices,
-        })
+        }
+        store.record(process_event)
+        emit_event(process_event)
 
         detector = None
         if detect_blocking:
             detector = BlockingDetector(
-                emit_event_async,
+                emit_and_record,
                 interval=block_check_interval / 1000,
                 threshold=block_threshold / 1000,
             )
@@ -45,35 +56,14 @@ class Calf:
             async def stop_blocking_detector():
                 await detector.stop()
 
-        @app.middleware("http")
-        async def calf_middleware(request, call_next):
-            start = time.perf_counter()
-
-            request_id = None
-            if detector is not None:
-                request_id = detector.register(request.method, request.url.path)
-
-            status = 500 # defaults to failure
-
-            try:
-                response = await call_next(request)
-
-                status = response.status_code
-
-                return response
-
-            finally:
-                if detector is not None and request_id is not None:
-                    detector.unregister(request_id)
-
-                latency_ms = (time.perf_counter() - start) * 1000
-
-                await emit_event_async({
-                    "pid": os.getpid(),
-                    "cuda_visible_devices": cuda_devices,
-                    "method": request.method,
-                    "path": request.url.path,
-                    "status": status,
-                    "latency_ms": latency_ms,
-                    "last_called": time.time(),
-                })
+        install_lifecycle_hooks()
+        if dashboard:
+            install_dashboard(app, store, dashboard_path)
+        app.add_middleware(
+            CalfLifecycleMiddleware,
+            emit=emit_and_record,
+            detector=detector,
+            cuda_devices=cuda_devices,
+            dashboard_path=dashboard_path if dashboard else None,
+            ignore_paths=("/favicon.ico", *ignore_paths),
+        )

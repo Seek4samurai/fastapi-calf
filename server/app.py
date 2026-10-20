@@ -1,5 +1,8 @@
-from fastapi import BackgroundTasks, FastAPI, Request
+import asyncio
+
+from fastapi import BackgroundTasks, Depends, FastAPI, Request
 from fastapi_calf import Calf
+from pydantic import BaseModel
 from typing import Any
 import time
 # import torch
@@ -11,7 +14,19 @@ import time
 
 app = FastAPI()
 
-Calf.listen(app, port=8765, server="test_server", block_threshold=50, block_check_interval=20)
+Calf.listen(app, port=8765, server="test_server", block_threshold=50, block_check_interval=20, dashboard_path="/calf")
+
+
+class LifecyclePayload(BaseModel):
+    message: str
+
+
+async def lifecycle_dependency():
+    await asyncio.sleep(0.03)
+
+
+def lifecycle_background_task():
+    time.sleep(0.04)
 
 
 @app.get("/health")
@@ -34,10 +49,20 @@ async def block_event_loop():
 @app.get("/cooperative-sleep")
 async def cooperative_sleep():
     """The async equivalent should not produce a blocking warning."""
-    import asyncio
-
     await asyncio.sleep(0.5)
     return {"message": "event loop remained available"}
+
+
+@app.post("/lifecycle", response_model=LifecyclePayload)
+async def lifecycle_demo(
+    payload: LifecyclePayload,
+    background_tasks: BackgroundTasks,
+    _dependency=Depends(lifecycle_dependency),
+):
+    """Exercise every lifecycle timer with small, visible delays."""
+    await asyncio.sleep(0.02)
+    background_tasks.add_task(lifecycle_background_task)
+    return payload
 
 
 @app.post("/translate")

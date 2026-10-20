@@ -20,9 +20,8 @@ def emit_event(event: dict):
 
             sock.sendall(payload)
 
-    except (ConnectionRefusedError, TimeoutError, OSError) as error:
+    except (ConnectionRefusedError, TimeoutError, OSError):
         # Monitoring should NEVER crash the API
-        print(f"Calf emitter error connecting to {config.host}:{config.port}: {error}")
         pass
 
 

@@ -38,6 +38,34 @@ python -m uvicorn server.app:app --port 8000 --workers 4
 Visit `http://127.0.0.1:8000/docs` to explore the API while the terminal
 dashboard updates in real time.
 
+Open `http://127.0.0.1:8000/calf` for the built-in web dashboard. It refreshes
+once per second and shows route traffic, failures, latency, event-loop stalls,
+and request lifecycle timing without requiring the separate terminal UI.
+
+The web dashboard is enabled by default and can be moved or disabled:
+
+```python
+Calf.listen(app, port=8005, server="jobs_api", dashboard_path="/observability")
+# Or: Calf.listen(..., dashboard=False)
+```
+
+Ignore health checks, metrics collectors, or other noisy paths with exact paths
+or shell-style wildcards. Calf ignores `/favicon.ico` and its own dashboard
+routes automatically.
+
+```python
+Calf.listen(
+    app,
+    port=8005,
+    server="jobs_api",
+    ignore_paths=("/health", "/ready", "/metrics", "/internal/*"),
+)
+```
+
+The embedded page is worker-local. When Uvicorn runs multiple workers, each
+dashboard request displays the process that served it; use the terminal daemon
+for the existing cross-worker aggregate view.
+
 ## Instrumenting an API
 
 Configure the monitor once, then decorate the routes you want to observe:
@@ -95,6 +123,26 @@ check interval detects stalls more precisely but wakes the watchdog more often.
 
 The example server exposes `/block-event-loop` as an intentional blocking case
 and `/cooperative-sleep` as its non-blocking comparison.
+
+### Request lifecycle timing
+
+Every HTTP event includes a `lifecycle` breakdown in milliseconds for request
+body parsing, dependency injection and validation, endpoint execution, response
+serialization, middleware/framework overhead, and background tasks. The live
+dashboard shows the most recent breakdown for each route.
+
+`middleware` is the residual request time after the directly measured phases;
+it includes routing, middleware work, response construction, and response
+transport. Streaming generator work is also included there because it occurs
+after the endpoint has returned its iterator.
+
+Try all lifecycle phases with the example endpoint:
+
+```powershell
+curl -X POST http://127.0.0.1:8000/lifecycle `
+  -H "Content-Type: application/json" `
+  -d '{"message":"hello"}'
+```
 
 ## Tests and traffic simulation
 
