@@ -3,7 +3,6 @@ import time
 
 from .config import config
 from .emitter import emit_event
-from .storage import initialize_database
 
 
 class Calf:
@@ -12,7 +11,6 @@ class Calf:
         config.host = host
         config.port = port
         config.server = server
-        config.database_path, config.event_table = initialize_database(server)
 
         cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES")
 

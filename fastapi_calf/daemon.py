@@ -2,8 +2,6 @@ import json
 import time
 import asyncio
 import argparse
-import sqlite3
-from pathlib import Path
 
 from rich.live import Live
 from rich.table import Table
@@ -16,7 +14,6 @@ from .history import cpu_history, latency_history, rps_history
 from .metrics import record_request, get_rps, get_window_latency
 from .sparkline import sparkline
 from .cleanup import cleanup_workers
-from .storage import DATABASE_NAME, find_metrics_tables, load_metrics, table_name
 
 workers = {
     # pid: {
@@ -31,50 +28,7 @@ start_time = time.time()
 
 last_history_sample = 0
 
-loaded_databases = set()
-
-
-def restore_from_current_directory(server=None):
-    database = Path.cwd() / DATABASE_NAME
-    available_tables = find_metrics_tables(database)
-    tables = [table_name(server)] if server else available_tables
-
-    if not tables:
-        return
-    if server and tables[0] not in available_tables:
-        print(f"No saved Calf metrics found for server '{server}'")
-        return
-    if len(tables) > 1 and server is None:
-        available = ", ".join(name.removeprefix("calf_") for name in tables)
-        print(f"Multiple Calf servers found ({available}); use calf --server NAME")
-        return
-
-    selected = tables[0]
-    stats.update(load_metrics(database, selected))
-    loaded_databases.add((str(database), selected))
-
-
-def restore_metrics(event):
-    database = event.get("_calf_database_path")
-    table = event.get("_calf_table")
-    if not database or not table:
-        return False
-
-    source = (database, table)
-    if source in loaded_databases:
-        return False
-
-    try:
-        stats.update(load_metrics(Path(database), table))
-        loaded_databases.add(source)
-        return bool(event.get("_calf_persisted"))
-    except (OSError, sqlite3.Error) as error:
-        print(f"Calf database restore error: {error}")
-        return False
-
-
 def process_event(event):
-    skip_current_event = restore_metrics(event)
     pid = event.get("pid")
 
     if pid is not None:
@@ -92,9 +46,6 @@ def process_event(event):
 
     # This was only a process/system event
     if "method" not in event or "path" not in event:
-        return
-
-    if skip_current_event:
         return
 
     if pid is not None:
@@ -362,11 +313,8 @@ def main():
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument("-p", "--port", type=int, default=8765, help="Port for fastapi-calf")
-        parser.add_argument("-s", "--server", help="Named server table to restore")
 
         args = parser.parse_args()
-
-        restore_from_current_directory(args.server)
 
         asyncio.run(run(args.port))
 

@@ -65,11 +65,7 @@ async def create_job(request: Request):
 
 The `Request` parameter allows `@lookout` to capture the method, path, query
 parameters, request size, status, and timing without changing the response.
-
-Calf creates `calf.sqlite3` in the application's current working directory.
-Each `server` value gets its own table (for example, `jobs_api` uses
-`calf_jobs_api`). Existing tables are reused, so events continue accumulating
-across application restarts.
+Metrics are kept in memory by the live dashboard and reset when it stops.
 
 ## Tests and traffic simulation
 
