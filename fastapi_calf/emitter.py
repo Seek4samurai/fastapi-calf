@@ -1,3 +1,4 @@
+import asyncio
 import json
 import socket
 
@@ -23,3 +24,8 @@ def emit_event(event: dict):
         # Monitoring should NEVER crash the API
         print(f"Calf emitter error connecting to {config.host}:{config.port}: {error}")
         pass
+
+
+async def emit_event_async(event: dict):
+    """Send an event without blocking the application's event loop."""
+    await asyncio.to_thread(emit_event, event)

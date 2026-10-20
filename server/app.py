@@ -11,7 +11,7 @@ import time
 
 app = FastAPI()
 
-Calf.listen(app, port=8765, server="test_server")
+Calf.listen(app, port=8765, server="test_server", block_threshold=50, block_check_interval=20)
 
 
 @app.get("/health")
@@ -22,6 +22,22 @@ def health():
 @app.get("/users")
 def users():
     return {"users": ["alice", "bob"]}
+
+
+@app.get("/block-event-loop")
+async def block_event_loop():
+    """Intentional anti-pattern used to test Calf's blocking detector."""
+    time.sleep(0.5)
+    return {"message": "event loop was blocked for 500 ms"}
+
+
+@app.get("/cooperative-sleep")
+async def cooperative_sleep():
+    """The async equivalent should not produce a blocking warning."""
+    import asyncio
+
+    await asyncio.sleep(0.5)
+    return {"message": "event loop remained available"}
 
 
 @app.post("/translate")

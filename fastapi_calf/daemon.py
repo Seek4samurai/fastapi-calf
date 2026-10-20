@@ -2,6 +2,7 @@ import json
 import time
 import asyncio
 import argparse
+from collections import deque
 
 from rich.live import Live
 from rich.table import Table
@@ -23,6 +24,7 @@ workers = {
 }
 
 stats = {}
+blocking_alerts = deque(maxlen=5)
 
 start_time = time.time()
 
@@ -38,11 +40,43 @@ def process_event(event):
             workers[pid] = {
                 "requests": 0,
                 "cuda_visible_devices": event.get("cuda_visible_devices"),
+                "blocks": 0,
+                "worst_block_ms": 0,
+                "dead_since": None,
             }
 
         # Update metadata if supplied again
         if "cuda_visible_devices" in event:
             workers[pid]["cuda_visible_devices"] = event["cuda_visible_devices"]
+
+    if event.get("type") == "loop_blocked":
+        blocked_ms = event.get("blocked_ms", 0)
+        affected = event.get("affected_requests", [])
+
+        if pid is not None:
+            workers[pid]["blocks"] += 1
+            workers[pid]["worst_block_ms"] = max(
+                workers[pid]["worst_block_ms"], blocked_ms
+            )
+
+        blocking_alerts.append({
+            "pid": pid,
+            "blocked_ms": blocked_ms,
+            "affected_requests": affected,
+        })
+
+        # Several requests may overlap a stall. Mark all of them as affected,
+        # but only once per route for this blocking event.
+        routes = {
+            (request.get("method"), request.get("path"))
+            for request in affected
+            if request.get("method") and request.get("path")
+        }
+        for method, path in routes:
+            item = get_route_stats(method, path)
+            item["blocks"] += 1
+            item["worst_block_ms"] = max(item["worst_block_ms"], blocked_ms)
+        return
 
     # This was only a process/system event
     if "method" not in event or "path" not in event:
@@ -51,14 +85,32 @@ def process_event(event):
     if pid is not None:
         workers[pid]["requests"] += 1
 
-    key = (event["method"], event["path"])
-
     record_request(event["latency_ms"])
+    item = get_route_stats(event["method"], event["path"])
 
+    item["requests"] += 1
+    item["total_latency"] += event["latency_ms"]
+    item["last_latency"] = event["latency_ms"]
+    item["last_called"] = time.time()
+    item["last_status"] = event["status"]
+    #
+    # NOTE: Disabled due to future changes &
+    #       due to removal of `request: Request`
+    # item["total_bytes"] += event["request_size"]
+    #
+    item["total_bytes"] += event.get("request_size", 0)
+
+    # Count failed requests
+    if event["status"] >= 400:
+        item["failed"] += 1
+
+
+def get_route_stats(method, path):
+    key = (method, path)
     if key not in stats:
         stats[key] = {
-            "method": event["method"],
-            "path": event["path"],
+            "method": method,
+            "path": path,
             "requests": 0,
             "failed": 0,
             "total_latency": 0,
@@ -66,25 +118,10 @@ def process_event(event):
             "total_bytes": 0,
             "last_called": 0,
             "last_status": 200,
+            "blocks": 0,
+            "worst_block_ms": 0,
         }
-
-    item = stats[key]
-
-    item["requests"] += 1
-    item["total_latency"] += event["latency_ms"]
-    item["last_latency"] = event["latency_ms"]
-    item["last_called"] = time.time()
-    item["last_status"] = event["status"]
-    # 
-    # NOTE: Disabled due to future changes &
-    #       due to removal of `request: Request`
-    # item["total_bytes"] += event["request_size"]
-    # 
-    item["total_bytes"] += event.get("request_size", 0)
-
-    # Count failed requests
-    if event["status"] >= 400:
-        item["failed"] += 1
+    return stats[key]
 
 
 def sample_history(process_stats):
@@ -161,6 +198,8 @@ def create_table():
     table.add_column("Activity")
     table.add_column("Requests", justify="right")
     table.add_column("Failed", justify="right")
+    table.add_column("Blocks", justify="right")
+    table.add_column("Worst block", justify="right")
     table.add_column("Avg latency", justify="right")
     table.add_column("Last", justify="right")
     table.add_column("Status", justify="right")
@@ -182,6 +221,16 @@ def create_table():
             active,
             str(item["requests"]),
             failed_display,
+            (
+                f"[yellow]{item['blocks']}[/yellow]"
+                if item["blocks"]
+                else "0"
+            ),
+            (
+                f"[yellow]{item['worst_block_ms']:.1f} ms[/yellow]"
+                if item["worst_block_ms"]
+                else "-"
+            ),
             f"{avg_latency:.2f} ms",
             f"{item['last_latency']:.2f} ms",
             str(item["last_status"]),
@@ -203,11 +252,26 @@ def create_table():
 
     workers_table = create_workers_table()
 
+    blocking_text = Text("No event-loop stalls detected", style="dim")
+    if blocking_alerts:
+        alert = blocking_alerts[-1]
+        routes = {
+            f"{request.get('method')} {request.get('path')}"
+            for request in alert["affected_requests"]
+        }
+        route_text = ", ".join(sorted(routes)) or "no active request"
+        blocking_text = Text(
+            f"⚠ Event loop blocked {alert['blocked_ms']:.1f} ms "
+            f"(worker {alert['pid']}): {route_text}",
+            style="bold yellow",
+        )
+
     return Group(
         # Align.center(Text("🐮 fastapi-calf 🐮", style="bold")),
         Align.center(Text(system_text)),
         Text(""),
         build_history_panel(),
+        blocking_text,
         Text(""),
         workers_table,
         Text(""),
@@ -222,6 +286,8 @@ def create_workers_table():
     table.add_column("CPU", justify="right")
     table.add_column("Memory", justify="right")
     table.add_column("Requests", justify="right")
+    table.add_column("Blocks", justify="right")
+    table.add_column("Worst block", justify="right")
     table.add_column("GPU", justify="right")
 
     dead_workers = []
@@ -247,6 +313,8 @@ def create_workers_table():
                 "--",
                 "--",
                 str(worker["requests"]),
+                str(worker["blocks"]),
+                f"{worker['worst_block_ms']:.1f} ms",
                 "none"
                 if worker["cuda_visible_devices"] is None
                 else str(worker["cuda_visible_devices"]),
@@ -262,6 +330,8 @@ def create_workers_table():
             f"{process_stats['cpu']:.1f}%",
             f"{process_stats['ram_mb']:.1f} MB",
             str(worker["requests"]),
+            str(worker["blocks"]),
+            f"{worker['worst_block_ms']:.1f} ms",
             "none"
             if worker["cuda_visible_devices"] is None
             else str(worker["cuda_visible_devices"]),

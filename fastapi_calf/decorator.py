@@ -1,4 +1,5 @@
 import inspect
+import asyncio
 import time
 import os
 
@@ -6,7 +7,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from fastapi import Request
 
-from .emitter import emit_event
+from .emitter import emit_event_async
 
 
 def lookout(func):
@@ -24,7 +25,7 @@ def lookout(func):
             if inspect.iscoroutinefunction(func):
                 response = await func(*args, **kwargs)
             else:
-                response = func(*args, **kwargs)
+                response = await asyncio.to_thread(func, *args, **kwargs)
             return response
 
         except Exception as exc:
@@ -52,6 +53,6 @@ def lookout(func):
                     "pid": os.getpid(),
                 }
 
-                emit_event(event)
+                await emit_event_async(event)
 
     return wrapper

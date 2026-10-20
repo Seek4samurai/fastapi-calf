@@ -67,6 +67,35 @@ The `Request` parameter allows `@lookout` to capture the method, path, query
 parameters, request size, status, and timing without changing the response.
 Metrics are kept in memory by the live dashboard and reset when it stops.
 
+### Event-loop blocking detection
+
+Calf watches each worker's asyncio event loop and warns when it cannot run for
+more than 100 ms. This catches blocking calls such as `time.sleep()`, synchronous
+HTTP clients, filesystem operations, and CPU-heavy work used inside `async def`
+endpoints. Overlapping requests are shown as affected rather than definitively
+identified as the cause.
+
+Tune or disable the detector when configuring the application:
+
+```python
+Calf.listen(
+    app,
+    port=8005,
+    server="jobs_api",
+    detect_blocking=True,
+    block_threshold=100,
+    block_check_interval=50,
+)
+```
+
+Both values are milliseconds. `block_check_interval` controls how often the
+watchdog asks the event loop to run. If it wakes at least `block_threshold`
+milliseconds later than expected, Calf records a blocking event. A smaller
+check interval detects stalls more precisely but wakes the watchdog more often.
+
+The example server exposes `/block-event-loop` as an intentional blocking case
+and `/cooperative-sleep` as its non-blocking comparison.
+
 ## Tests and traffic simulation
 
 Install the testing tools and run the correctness suite:
