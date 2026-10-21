@@ -1,9 +1,11 @@
+import asyncio
 import os
 from .config import config
 from .blocking import BlockingDetector
-from .emitter import emit_event, emit_event_async
+from .emitter import emit_event_async
 from .lifecycle import CalfLifecycleMiddleware, install_lifecycle_hooks
 from .dashboard import install_dashboard_redirect
+from .autostart import ensure_collector
 
 
 class Calf:
@@ -20,18 +22,13 @@ class Calf:
         dashboard: bool = True,
         dashboard_path: str = "/calf",
         ignore_paths: tuple[str, ...] | list[str] = (),
+        auto_start_collector: bool = True,
     ):
         config.host = host
         config.port = port
         config.server = server
 
         cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES")
-
-        process_event = {
-            "pid": os.getpid(),
-            "cuda_visible_devices": cuda_devices,
-        }
-        emit_event(process_event)
 
         detector = None
         if detect_blocking:
@@ -41,13 +38,20 @@ class Calf:
                 threshold=block_threshold / 1000,
             )
 
-            @app.on_event("startup")
-            async def start_blocking_detector():
-                detector.start()
-
             @app.on_event("shutdown")
             async def stop_blocking_detector():
                 await detector.stop()
+
+        @app.on_event("startup")
+        async def start_calf():
+            if auto_start_collector:
+                await asyncio.to_thread(ensure_collector, host, port)
+            await emit_event_async({
+                "pid": os.getpid(),
+                "cuda_visible_devices": cuda_devices,
+            })
+            if detector is not None:
+                detector.start()
 
         install_lifecycle_hooks()
         if dashboard:

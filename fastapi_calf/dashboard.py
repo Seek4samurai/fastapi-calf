@@ -127,6 +127,10 @@ class DashboardStore:
                 },
             }
 
+    def worker_pids(self) -> tuple[int, ...]:
+        with self._lock:
+            return tuple(self.workers)
+
 
 def install_dashboard(app, store: DashboardStore, path: str) -> None:
     stripped_path = path.strip("/")

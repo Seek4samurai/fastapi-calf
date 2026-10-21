@@ -23,17 +23,19 @@ Install the runtime dependencies from the repository root:
 python -m pip install fastapi uvicorn rich psutil
 ```
 
-Start the collector, web dashboard, and terminal UI on port `8765`:
-
-```powershell
-python -m fastapi_calf.daemon --port 8765
-```
-
-In another terminal, start the included example API with four workers:
+Start the included example API with four workers:
 
 ```powershell
 python -m uvicorn server.app:app --port 8000 --workers 4
 ```
+
+`Calf.listen()` detects whether its collector is running on port `8765`. If it
+is missing, the first application worker starts it automatically; the other
+workers reuse it. The auto-started collector exits after the application
+workers stop.
+
+The `port` passed to `Calf.listen()` is the Calf collector/dashboard port. The
+FastAPI application port remains whatever you pass to Uvicorn (`8000` above).
 
 Visit `http://127.0.0.1:8000/docs` to explore the API while the terminal
 dashboard updates in real time.
@@ -43,10 +45,11 @@ Open `http://127.0.0.1:8000/calf` to redirect to the aggregated dashboard at
 traffic, failures, latency, event-loop stalls, and lifecycle timing from every
 Uvicorn worker.
 
-Run only the collector and web dashboard when the terminal view is not needed:
+The automatically started collector serves the web dashboard without a terminal
+UI. To use the terminal view, start the collector explicitly before Uvicorn:
 
 ```powershell
-python -m fastapi_calf.daemon --port 8765 --no-terminal
+python -m fastapi_calf.daemon --port 8765
 ```
 
 The web dashboard is enabled by default and can be moved or disabled:
@@ -54,6 +57,7 @@ The web dashboard is enabled by default and can be moved or disabled:
 ```python
 Calf.listen(app, port=8765, server="jobs_api", dashboard_path="/observability")
 # Or: Calf.listen(..., dashboard=False)
+# Or manage the collector yourself: Calf.listen(..., auto_start_collector=False)
 ```
 
 Ignore health checks, metrics collectors, or other noisy paths with exact paths

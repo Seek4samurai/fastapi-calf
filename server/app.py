@@ -1,3 +1,6 @@
+# This is just a testing app.py
+# Use this as an example on how to use fastapi_calf
+
 import asyncio
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Request
@@ -5,12 +8,6 @@ from fastapi_calf import Calf
 from pydantic import BaseModel
 from typing import Any
 import time
-# import torch
-
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-# print(device)
-
 
 app = FastAPI()
 

@@ -4,6 +4,7 @@ import argparse
 from collections import deque
 
 from fastapi import FastAPI, Response
+import psutil
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
@@ -26,6 +27,11 @@ collector_app = FastAPI(
     openapi_url=None,
 )
 install_dashboard(collector_app, collector_store, "/")
+
+
+@collector_app.get("/api/health", include_in_schema=False)
+async def collector_health():
+    return {"status": "ok"}
 
 
 @collector_app.post("/api/events", include_in_schema=False)
@@ -397,7 +403,22 @@ def create_workers_table():
     return table
 
 
-async def run_server(host: str, port: int):
+async def stop_when_workers_exit(server):
+    inactive_since = None
+    while not server.should_exit:
+        await asyncio.sleep(1)
+        pids = collector_store.worker_pids()
+        has_live_worker = any(psutil.pid_exists(pid) for pid in pids)
+        if has_live_worker:
+            inactive_since = None
+            continue
+        if inactive_since is None:
+            inactive_since = time.monotonic()
+        elif time.monotonic() - inactive_since >= 10:
+            server.should_exit = True
+
+
+async def run_server(host: str, port: int, auto_started: bool = False):
     import uvicorn
 
     server = uvicorn.Server(uvicorn.Config(
@@ -407,7 +428,10 @@ async def run_server(host: str, port: int):
         log_level="warning",
         access_log=False,
     ))
-    await server.serve()
+    if auto_started:
+        await asyncio.gather(server.serve(), stop_when_workers_exit(server))
+    else:
+        await server.serve()
 
 
 async def run_ui():
@@ -423,8 +447,13 @@ async def run_ui():
             await asyncio.sleep(0.1)
 
 
-async def run(host: str, port: int, terminal: bool = True):
-    tasks = [asyncio.create_task(run_server(host, port))]
+async def run(
+    host: str,
+    port: int,
+    terminal: bool = True,
+    auto_started: bool = False,
+):
+    tasks = [asyncio.create_task(run_server(host, port, auto_started))]
     if terminal:
         tasks.append(asyncio.create_task(run_ui()))
 
@@ -447,10 +476,20 @@ def main():
             action="store_true",
             help="Serve the web dashboard without the terminal UI",
         )
+        parser.add_argument(
+            "--auto-started",
+            action="store_true",
+            help=argparse.SUPPRESS,
+        )
 
         args = parser.parse_args()
 
-        asyncio.run(run(args.host, args.port, terminal=not args.no_terminal))
+        asyncio.run(run(
+            args.host,
+            args.port,
+            terminal=not args.no_terminal,
+            auto_started=args.auto_started,
+        ))
 
     except KeyboardInterrupt:
         print("fastapi-calf stopped.")
