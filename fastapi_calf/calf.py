@@ -3,7 +3,7 @@ from .config import config
 from .blocking import BlockingDetector
 from .emitter import emit_event, emit_event_async
 from .lifecycle import CalfLifecycleMiddleware, install_lifecycle_hooks
-from .dashboard import DashboardStore, install_dashboard
+from .dashboard import install_dashboard_redirect
 
 
 class Calf:
@@ -27,23 +27,16 @@ class Calf:
 
         cuda_devices = os.getenv("CUDA_VISIBLE_DEVICES")
 
-        store = DashboardStore(server)
-
-        async def emit_and_record(event):
-            store.record(event)
-            await emit_event_async(event)
-
         process_event = {
             "pid": os.getpid(),
             "cuda_visible_devices": cuda_devices,
         }
-        store.record(process_event)
         emit_event(process_event)
 
         detector = None
         if detect_blocking:
             detector = BlockingDetector(
-                emit_and_record,
+                emit_event_async,
                 interval=block_check_interval / 1000,
                 threshold=block_threshold / 1000,
             )
@@ -58,10 +51,14 @@ class Calf:
 
         install_lifecycle_hooks()
         if dashboard:
-            install_dashboard(app, store, dashboard_path)
+            install_dashboard_redirect(
+                app,
+                dashboard_path,
+                f"http://{host}:{port}/",
+            )
         app.add_middleware(
             CalfLifecycleMiddleware,
-            emit=emit_and_record,
+            emit=emit_event_async,
             detector=detector,
             cuda_devices=cuda_devices,
             dashboard_path=dashboard_path if dashboard else None,

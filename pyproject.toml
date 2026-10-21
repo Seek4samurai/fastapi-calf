@@ -13,6 +13,7 @@ dependencies = [
     "fastapi",
     "rich",
     "psutil",
+    "uvicorn",
 ]
 
 [project.scripts]

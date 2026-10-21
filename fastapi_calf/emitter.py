@@ -1,28 +1,36 @@
 import asyncio
+import http.client
 import json
-import socket
 
 from .config import config
 
 
 def emit_event(event: dict):
+    connection = None
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.05)
+        wire_event = {
+            **event,
+            "_calf_server": config.server,
+        }
+        payload = json.dumps(wire_event).encode("utf-8")
+        connection = http.client.HTTPConnection(
+            config.host, config.port, timeout=0.1
+        )
+        connection.request(
+            "POST",
+            "/api/events",
+            body=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        response.read()
 
-            sock.connect((config.host, config.port))
-
-            wire_event = {
-                **event,
-                "_calf_server": config.server,
-            }
-            payload = json.dumps(wire_event).encode("utf-8") + b"\n"
-
-            sock.sendall(payload)
-
-    except (ConnectionRefusedError, TimeoutError, OSError):
+    except (ConnectionRefusedError, TimeoutError, OSError, http.client.HTTPException):
         # Monitoring should NEVER crash the API
         pass
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 async def emit_event_async(event: dict):

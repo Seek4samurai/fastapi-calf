@@ -1,9 +1,9 @@
-import json
 import time
 import asyncio
 import argparse
 from collections import deque
 
+from fastapi import FastAPI, Response
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
@@ -15,6 +15,23 @@ from .history import cpu_history, latency_history, rps_history
 from .metrics import record_request, get_rps, get_window_latency
 from .sparkline import sparkline
 from .cleanup import cleanup_workers
+from .dashboard import DashboardStore, install_dashboard
+
+
+collector_store = DashboardStore("Calf collector")
+collector_app = FastAPI(
+    title="Calf collector",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+install_dashboard(collector_app, collector_store, "/")
+
+
+@collector_app.post("/api/events", include_in_schema=False)
+async def collect_event(event: dict):
+    process_event(event)
+    return Response(status_code=204)
 
 workers = {
     # pid: {
@@ -31,6 +48,7 @@ start_time = time.time()
 last_history_sample = 0
 
 def process_event(event):
+    collector_store.record(event)
     pid = event.get("pid")
 
     if pid is not None:
@@ -379,24 +397,17 @@ def create_workers_table():
     return table
 
 
-async def handle_client(reader, writer):
-    data = await reader.readline()
+async def run_server(host: str, port: int):
+    import uvicorn
 
-    if data:
-        try:
-            event = json.loads(data)
-            process_event(event)
-        except json.JSONDecodeError:
-            pass
-
-    writer.close()
-    await writer.wait_closed()
-
-
-async def run_server(port: int):
-    server = await asyncio.start_server(handle_client, "127.0.0.1", port)
-    async with server:
-        await server.serve_forever()
+    server = uvicorn.Server(uvicorn.Config(
+        collector_app,
+        host=host,
+        port=port,
+        log_level="warning",
+        access_log=False,
+    ))
+    await server.serve()
 
 
 async def run_ui():
@@ -412,17 +423,34 @@ async def run_ui():
             await asyncio.sleep(0.1)
 
 
-async def run(port: int):
-    await asyncio.gather(run_server(port), run_ui())
+async def run(host: str, port: int, terminal: bool = True):
+    tasks = [asyncio.create_task(run_server(host, port))]
+    if terminal:
+        tasks.append(asyncio.create_task(run_ui()))
+
+    done, pending = await asyncio.wait(
+        tasks, return_when=asyncio.FIRST_COMPLETED
+    )
+    for task in pending:
+        task.cancel()
+    await asyncio.gather(*pending, return_exceptions=True)
+    for task in done:
+        task.result()
 
 def main():
     try:
         parser = argparse.ArgumentParser()
         parser.add_argument("-p", "--port", type=int, default=8765, help="Port for fastapi-calf")
+        parser.add_argument("--host", default="127.0.0.1", help="Collector bind host")
+        parser.add_argument(
+            "--no-terminal",
+            action="store_true",
+            help="Serve the web dashboard without the terminal UI",
+        )
 
         args = parser.parse_args()
 
-        asyncio.run(run(args.port))
+        asyncio.run(run(args.host, args.port, terminal=not args.no_terminal))
 
     except KeyboardInterrupt:
         print("fastapi-calf stopped.")

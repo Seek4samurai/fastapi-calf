@@ -23,10 +23,10 @@ Install the runtime dependencies from the repository root:
 python -m pip install fastapi uvicorn rich psutil
 ```
 
-Start the monitoring dashboard on port `8005`:
+Start the collector, web dashboard, and terminal UI on port `8765`:
 
 ```powershell
-python -m fastapi_calf.daemon --port 8005
+python -m fastapi_calf.daemon --port 8765
 ```
 
 In another terminal, start the included example API with four workers:
@@ -38,14 +38,21 @@ python -m uvicorn server.app:app --port 8000 --workers 4
 Visit `http://127.0.0.1:8000/docs` to explore the API while the terminal
 dashboard updates in real time.
 
-Open `http://127.0.0.1:8000/calf` for the built-in web dashboard. It refreshes
-once per second and shows route traffic, failures, latency, event-loop stalls,
-and request lifecycle timing without requiring the separate terminal UI.
+Open `http://127.0.0.1:8000/calf` to redirect to the aggregated dashboard at
+`http://127.0.0.1:8765/`. It refreshes once per second and combines route
+traffic, failures, latency, event-loop stalls, and lifecycle timing from every
+Uvicorn worker.
+
+Run only the collector and web dashboard when the terminal view is not needed:
+
+```powershell
+python -m fastapi_calf.daemon --port 8765 --no-terminal
+```
 
 The web dashboard is enabled by default and can be moved or disabled:
 
 ```python
-Calf.listen(app, port=8005, server="jobs_api", dashboard_path="/observability")
+Calf.listen(app, port=8765, server="jobs_api", dashboard_path="/observability")
 # Or: Calf.listen(..., dashboard=False)
 ```
 
@@ -62,9 +69,9 @@ Calf.listen(
 )
 ```
 
-The embedded page is worker-local. When Uvicorn runs multiple workers, each
-dashboard request displays the process that served it; use the terminal daemon
-for the existing cross-worker aggregate view.
+Workers send best-effort HTTP events to the collector's `/api/events` endpoint.
+The collector exposes aggregate JSON at `/api/stats`; both the web and terminal
+views read the same in-memory process-wide aggregation.
 
 ## Instrumenting an API
 
